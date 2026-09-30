@@ -94,10 +94,10 @@ enum Cmd {
         #[arg(long)]
         include_deps: bool,
     },
-    /// 卸载应用并清理它在 Library 下的残留文件
+    /// 卸载应用并清理它在 Library 下的残留文件；不指定应用时列出所有应用
     Uninstall {
-        /// 应用名称（如 Slack）或 .app 路径
-        app: String,
+        /// 应用名称（文件名、Finder 显示名或 Bundle ID）或 .app 路径
+        app: Option<String>,
     },
 }
 
@@ -160,12 +160,39 @@ fn run(cli: Cli) -> Result<ExitCode> {
             }
             (dupes::scan(&root, *min, &skip, &stats), true)
         }
-        Cmd::Uninstall { app } => {
-            let app = uninstall::locate(app, &home)?;
+        Cmd::Uninstall { app: Some(arg) } => {
+            let app = uninstall::locate(arg, &home)?;
             if cli.clean && uninstall::is_running(&app) {
-                bail!("{} 正在运行，请先退出再卸载", app.name);
+                bail!("{} 正在运行，请先退出再卸载", app.display);
             }
             (uninstall::scan(&app, &home, &stats), true)
+        }
+        Cmd::Uninstall { app: None } if !cli.clean => {
+            let apps = uninstall::list_with_sizes(&home, &stats);
+            let found = apps
+                .iter()
+                .map(|(app, size)| uninstall::app_finding(app, *size))
+                .collect();
+            (found, false)
+        }
+        Cmd::Uninstall { app: None } => {
+            if cli.yes {
+                bail!("--yes 必须配合应用名称使用，避免一次删除所有应用");
+            }
+            let apps = uninstall::list_with_sizes(&home, &stats);
+            stats.finish();
+            let Some(apps) = pick_apps(apps, &home)? else {
+                println!("{}", console::style("没有选中任何应用。").dim());
+                return Ok(ExitCode::SUCCESS);
+            };
+            let mut found = Vec::new();
+            for app in &apps {
+                if uninstall::is_running(app) {
+                    bail!("{} 正在运行，请先退出再卸载", app.display);
+                }
+                found.extend(uninstall::scan(app, &home, &stats));
+            }
+            (found, true)
         }
     };
     stats.finish();
@@ -234,6 +261,37 @@ fn select<'a>(findings: &'a [Finding], home: &Path, preselect: bool) -> Result<V
         report::print_selected(&selected);
     }
     Ok(selected)
+}
+
+/// 先选要卸载的应用；一个都没选时返回 None。
+fn pick_apps(apps: Vec<(uninstall::App, u64)>, home: &Path) -> Result<Option<Vec<uninstall::App>>> {
+    if apps.is_empty() {
+        bail!("在 /Applications 和 ~/Applications 中没有找到应用");
+    }
+    if !std::io::stdin().is_terminal() {
+        bail!("非交互终端下请指定要卸载的应用名称");
+    }
+    let labels: Vec<String> = apps
+        .iter()
+        .map(|(app, size)| {
+            format!(
+                "{:>10}  {}  ({})",
+                report::human(*size),
+                app.display,
+                report::display_path(&app.path, home)
+            )
+        })
+        .collect();
+    let sizes: Vec<u64> = apps.iter().map(|(_, size)| *size).collect();
+    let chosen = select::multi_select(&labels, &sizes, false)?.unwrap_or_default();
+    if chosen.is_empty() {
+        return Ok(None);
+    }
+    let mut apps: Vec<Option<uninstall::App>> =
+        apps.into_iter().map(|(app, _)| Some(app)).collect();
+    Ok(Some(
+        chosen.into_iter().filter_map(|i| apps[i].take()).collect(),
+    ))
 }
 
 /// HOME 目录。环境变量 `CLR_HOME` 优先，供测试注入假 HOME。

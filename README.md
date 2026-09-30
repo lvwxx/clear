@@ -16,7 +16,9 @@ clr junk --category dev,xcode     # 只看某些类别
 clr large --min 1G --older 90d    # 90 天没访问过的 1G 以上文件
 clr large --dirs                  # HOME 下占用最多的目录
 clr dupes ~/Downloads             # 重复文件（默认只比较 ≥ 1M 的，跳过 node_modules、Go/Rust/npm 依赖缓存）
-clr uninstall Slack               # 应用本体 + Library 下的残留
+clr uninstall                     # 列出所有应用（按大小排序）
+clr uninstall --clean             # 勾选要卸载的应用，再确认要删的文件
+clr uninstall "Cleaner One Pro"   # 按 Finder 显示名、文件名或 Bundle ID 卸载，含内嵌辅助程序和崩溃报告
 ```
 
 通用参数：

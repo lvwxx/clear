@@ -377,3 +377,98 @@ fn dupes_skips_dependency_dirs_by_default() {
     let (_, v) = env.json(&["dupes", "--include-deps"]);
     assert_eq!(v["findings"].as_array().unwrap().len(), 3);
 }
+
+#[test]
+fn uninstall_finds_app_by_localized_display_name() {
+    let env = Env::new();
+    fake_app(
+        &env,
+        "Applications/DrCleanerX.app",
+        "com.example.DrCleanerX",
+    );
+    // 与真实应用一样，用 UTF-16LE + BOM 的 InfoPlist.strings 定义显示名
+    let strings = "\"CFBundleName\" = \"Cleaner Zeta Pro\";\n";
+    let mut bytes = vec![0xFF, 0xFE];
+    bytes.extend(strings.encode_utf16().flat_map(|u| u.to_le_bytes()));
+    env.write_bytes(
+        "Applications/DrCleanerX.app/Contents/Resources/en.lproj/InfoPlist.strings",
+        &bytes,
+    );
+
+    let (code, v) = env.json(&["uninstall", "cleaner zeta pro"]);
+    assert_eq!(code, 0);
+    assert_eq!(env.paths(&v), ["Applications/DrCleanerX.app"]);
+    assert!(
+        v["findings"][0]["note"]
+            .as_str()
+            .unwrap()
+            .starts_with("Cleaner Zeta Pro")
+    );
+
+    // Bundle ID 也能找到
+    let (code, _) = env.json(&["uninstall", "com.example.DrCleanerX"]);
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn uninstall_without_name_lists_apps() {
+    let env = Env::new();
+    fake_app(&env, "Applications/Foo.app", "com.acme.Foo");
+    fake_app(&env, "Applications/Tools/Bar.app", "com.acme.Bar");
+
+    // 列表里还会有真实 /Applications 下的应用，只检查假 HOME 里的
+    let (code, v) = env.json(&["uninstall"]);
+    assert_eq!(code, 0);
+    let mine: Vec<&str> = v["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["note"].as_str().unwrap())
+        .filter(|n| n.contains("com.acme."))
+        .collect();
+    assert_eq!(mine.len(), 2, "{mine:?}");
+}
+
+#[test]
+fn uninstall_without_name_refuses_yes() {
+    let env = Env::new();
+    env.clr()
+        .args(["uninstall", "--clean", "--yes"])
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains("--yes 必须配合应用名称"));
+}
+
+#[test]
+fn uninstall_includes_helpers_scripts_and_crash_reports() {
+    let env = Env::new();
+    fake_app(&env, "Applications/DrFoo.app", "com.acme.DrFoo");
+    fake_app(
+        &env,
+        "Applications/DrFoo.app/Contents/Library/LoginItems/Login.app",
+        "com.acme.DrFooLogin",
+    );
+    // 第三方框架里的 ID 不能算进来
+    fake_app(
+        &env,
+        "Applications/DrFoo.app/Contents/PlugIns/Shared.appex",
+        "org.sparkle.Shared",
+    );
+    env.write("Library/Containers/com.acme.DrFooLogin/x", 100);
+    env.write("Library/Application Scripts/com.acme.DrFoo/s", 100);
+    env.write("Library/Logs/DiagnosticReports/DrFoo_2026-09-25-231025_host.diag", 100);
+    env.write("Library/Caches/org.sparkle.Shared/c", 100);
+    env.write("Library/Logs/DiagnosticReports/DrFooBar_2026-09-25.ips", 100);
+
+    let (code, v) = env.json(&["uninstall", "DrFoo"]);
+    assert_eq!(code, 0);
+    assert_eq!(
+        env.paths(&v),
+        [
+            "Applications/DrFoo.app",
+            "Library/Application Scripts/com.acme.DrFoo",
+            "Library/Containers/com.acme.DrFooLogin",
+            "Library/Logs/DiagnosticReports/DrFoo_2026-09-25-231025_host.diag",
+        ]
+    );
+}

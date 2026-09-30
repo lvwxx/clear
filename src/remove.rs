@@ -30,7 +30,8 @@ impl Remover for TrashRemover {
         }
         let mut ctx = trash::TrashContext::default();
         ctx.set_delete_method(DeleteMethod::NsFileManager);
-        ctx.delete(path).map_err(|e| anyhow::anyhow!(trash_error_reason(&e)))
+        ctx.delete(path)
+            .map_err(|e| anyhow::anyhow!(trash_error_reason(&e)))
     }
 }
 

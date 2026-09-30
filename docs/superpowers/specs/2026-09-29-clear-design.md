@@ -105,6 +105,8 @@ desc = "Xcode 编译中间产物，会自动重建"
 
 ### 4.4 uninstall
 
+> 实现后的补充：不带参数时列出 `/Applications`、`~/Applications`（含一层子文件夹）的所有应用；带 `--clean` 时先多选应用（此时禁止 `--yes`）。按名称查找时匹配文件名、`CFBundleName`/`CFBundleDisplayName`、`InfoPlist.strings` 本地化名、Bundle ID。残留匹配还包括 `Application Scripts`、`Logs`、崩溃报告（`<进程名>_<数字>` 开头），以及 App 内嵌辅助程序（LoginItems/XPCServices/PlugIns/Helpers 下、与主程序同厂商前缀）的 Bundle ID。
+
 1. 定位 App：参数是 `.app` 路径时直接使用，否则在 `/Applications`、`~/Applications` 中按名称（忽略大小写，可省略 `.app`）查找。
 2. 用 `plist` crate 读取 `Contents/Info.plist` 的 `CFBundleIdentifier`。
 3. 在以下目录中匹配文件名**等于 Bundle ID、以 `<BundleID>.` 开头，或以 `.<BundleID>` 结尾**（Group Containers 的 `<TeamID>.<BundleID>`）的项（忽略大小写），以及文件名等于 App 名称的项（仅限 Application Support、Caches）：
