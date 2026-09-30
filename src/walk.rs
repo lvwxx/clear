@@ -9,19 +9,67 @@ use std::time::SystemTime;
 
 use jwalk::WalkDir;
 
-/// 扫描过程中的统计，目前只记录因权限等原因跳过的路径数。
+use crate::progress::Progress;
+
+/// 扫描上下文：统计因权限等原因跳过的路径数，并在终端里驱动进度行（可选）。
 #[derive(Default)]
 pub struct Stats {
     skipped: AtomicUsize,
+    progress: Option<Progress>,
 }
 
 impl Stats {
+    pub fn with_progress(progress: Progress) -> Self {
+        Stats {
+            skipped: AtomicUsize::new(0),
+            progress: Some(progress),
+        }
+    }
+
     pub fn skip(&self) {
         self.skipped.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn skipped(&self) -> usize {
         self.skipped.load(Ordering::Relaxed)
+    }
+
+    pub fn stage(&self, stage: impl Into<std::borrow::Cow<'static, str>>) {
+        if let Some(p) = &self.progress {
+            p.stage(stage);
+        }
+    }
+
+    pub fn restart(&self, stage: impl Into<std::borrow::Cow<'static, str>>) {
+        if let Some(p) = &self.progress {
+            p.restart(stage);
+        }
+    }
+
+    pub fn at(&self, path: &Path) {
+        if let Some(p) = &self.progress {
+            p.at(path);
+        }
+    }
+
+    pub fn file(&self) {
+        if let Some(p) = &self.progress {
+            p.file();
+        }
+    }
+
+    /// 清掉进度行，之后才能输出结果或弹出选择界面。
+    pub fn finish(&self) {
+        if let Some(p) = &self.progress {
+            p.finish();
+        }
+    }
+}
+
+impl Drop for Stats {
+    /// 出错提前返回时也不能把进度行留在屏幕上。
+    fn drop(&mut self) {
+        self.finish();
     }
 }
 
@@ -64,11 +112,12 @@ pub fn disk_usage(path: &Path, stats: &Stats) -> u64 {
         return 0;
     };
     if !meta.is_dir() {
+        stats.file();
         return disk_bytes(&meta);
     }
     let mut seen = HashSet::new();
     let mut total = 0;
-    for entry in walker(path, meta.dev(), Skip::default()) {
+    for entry in walker(path, meta.dev(), Skip::default(), stats) {
         let Ok(entry) = entry else {
             stats.skip();
             continue;
@@ -76,6 +125,7 @@ pub fn disk_usage(path: &Path, stats: &Stats) -> u64 {
         if entry.file_type().is_dir() {
             continue;
         }
+        stats.file();
         let Ok(meta) = std::fs::symlink_metadata(entry.path()) else {
             stats.skip();
             continue;
@@ -95,7 +145,7 @@ pub fn files(root: &Path, skip: &Skip, stats: &Stats) -> Vec<FileEntry> {
         return Vec::new();
     };
     let mut out = Vec::new();
-    for entry in walker(root, root_meta.dev(), skip.clone()) {
+    for entry in walker(root, root_meta.dev(), skip.clone(), stats) {
         let Ok(entry) = entry else {
             stats.skip();
             continue;
@@ -103,6 +153,7 @@ pub fn files(root: &Path, skip: &Skip, stats: &Stats) -> Vec<FileEntry> {
         if !entry.file_type().is_file() {
             continue;
         }
+        stats.file();
         let path = entry.path();
         let Ok(meta) = std::fs::symlink_metadata(&path) else {
             stats.skip();
@@ -128,11 +179,16 @@ pub fn device(path: &Path) -> Option<u64> {
 
 /// 不跟随符号链接、不跨文件系统（类似 `du -x`）的遍历器，
 /// 不进入 `skip` 指定的目录。像 ~/OrbStack 这类挂载点里是别的文件系统，不该算进来。
-fn walker(root: &Path, root_dev: u64, skip: Skip) -> WalkDir {
+/// 每读一个目录就把它报给进度行。
+fn walker(root: &Path, root_dev: u64, skip: Skip, stats: &Stats) -> WalkDir {
+    let progress = stats.progress.clone();
     WalkDir::new(root)
         .follow_links(false)
         .skip_hidden(false)
-        .process_read_dir(move |_, _, _, children| {
+        .process_read_dir(move |_, dir, _, children| {
+            if let Some(p) = &progress {
+                p.at(dir);
+            }
             for child in children.iter_mut().flatten() {
                 if !child.file_type().is_dir() {
                     continue;

@@ -14,6 +14,7 @@ pub fn files(
     skip: &Skip,
     stats: &Stats,
 ) -> Vec<Finding> {
+    stats.stage("查找大文件");
     let cutoff = older.and_then(|d| SystemTime::now().checked_sub(d));
     let mut out: Vec<Finding> = walk::files(root, skip, stats)
         .into_iter()
@@ -32,6 +33,7 @@ pub fn files(
 
 /// root 下占用最多的前 `top` 个直接子项（目录或文件）。
 pub fn dirs(root: &Path, top: usize, skip: &Skip, stats: &Stats) -> Vec<Finding> {
+    stats.stage("统计目录占用");
     let Ok(entries) = std::fs::read_dir(root) else {
         stats.skip();
         return Vec::new();

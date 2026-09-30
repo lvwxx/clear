@@ -116,18 +116,21 @@ fn regex_escape(s: &str) -> String {
 
 /// 应用本体加上所有残留文件。
 pub fn scan(app: &App, home: &Path, stats: &Stats) -> Vec<Finding> {
+    stats.stage("统计应用大小");
     let mut out = vec![Finding {
         path: app.path.clone(),
         size: walk::disk_usage(&app.path, stats),
         category: "app".into(),
         note: app.bundle_id.clone(),
     }];
+    stats.stage("查找残留文件");
     let library = home.join("Library");
     let dirs = USER_LIBRARY_DIRS
         .iter()
         .map(|d| (library.join(d), NAME_MATCH_DIRS.contains(d)))
         .chain(SYSTEM_DIRS.iter().map(|d| (PathBuf::from(d), false)));
     for (dir, by_name) in dirs {
+        stats.at(&dir);
         let Ok(entries) = std::fs::read_dir(&dir) else {
             continue;
         };

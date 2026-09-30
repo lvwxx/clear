@@ -15,11 +15,17 @@ pub fn scan(rules: &[Rule], categories: &[String], home: &Path, stats: &Stats) -
         if !categories.is_empty() && !categories.contains(&rule.category) {
             continue;
         }
+        stats.stage(if rule.desc.is_empty() {
+            rule.id.clone()
+        } else {
+            rule.desc.clone()
+        });
         for pattern in &rule.paths {
             for path in rules::expand(pattern, home) {
                 if !seen.insert(path.clone()) {
                     continue;
                 }
+                stats.at(&path);
                 let size = walk::disk_usage(&path, stats);
                 if size == 0 {
                     continue;

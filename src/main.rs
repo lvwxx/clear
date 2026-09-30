@@ -3,6 +3,7 @@ mod dupes;
 mod finding;
 mod junk;
 mod large;
+mod progress;
 mod remove;
 mod report;
 mod rules;
@@ -114,7 +115,12 @@ fn run(cli: Cli) -> Result<ExitCode> {
         bail!("--json 与 --clean 同时使用时必须加 --yes");
     }
     let home = home_dir()?;
-    let stats = Stats::default();
+    // 只在交互终端里显示进度行，JSON 或重定向输出时保持干净
+    let stats = if !cli.json && std::io::stderr().is_terminal() {
+        Stats::with_progress(progress::Progress::new(&home))
+    } else {
+        Stats::default()
+    };
 
     // large 结果是用户自己的文件，默认不勾选；其余默认全选
     let (findings, preselect) = match &cli.cmd {
@@ -156,6 +162,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             (uninstall::scan(&app, &home, &stats), true)
         }
     };
+    stats.finish();
 
     if !cli.clean {
         if cli.json {

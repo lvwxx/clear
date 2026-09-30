@@ -14,6 +14,7 @@ const HEAD: usize = 4096;
 
 pub fn scan(root: &Path, min: u64, skip: &Skip, stats: &Stats) -> Vec<Finding> {
     // 1. 按大小分组；同一 inode（硬链接）只保留一份
+    stats.stage("遍历文件");
     let mut by_len: HashMap<u64, Vec<FileEntry>> = HashMap::new();
     let mut inodes = HashSet::new();
     for f in walk::files(root, skip, stats) {
@@ -24,6 +25,7 @@ pub fn scan(root: &Path, min: u64, skip: &Skip, stats: &Stats) -> Vec<Finding> {
     let candidates: Vec<Vec<FileEntry>> = by_len.into_values().filter(|g| g.len() > 1).collect();
 
     // 2. 头部哈希；3. 全量哈希（文件不超过 4KB 时头部哈希就是全量）
+    stats.restart("比较文件内容");
     let groups: Vec<Vec<FileEntry>> = candidates
         .into_par_iter()
         .flat_map(|group| split_by(group, |f| hash_head(&f.path), stats))
@@ -78,6 +80,8 @@ fn split_by(
 ) -> Vec<Vec<FileEntry>> {
     let mut by_hash: HashMap<blake3::Hash, Vec<FileEntry>> = HashMap::new();
     for f in group {
+        stats.at(&f.path);
+        stats.file();
         match hash(&f) {
             Ok(h) => by_hash.entry(h).or_default().push(f),
             Err(_) => stats.skip(),
