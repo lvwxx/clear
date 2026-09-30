@@ -47,7 +47,7 @@ HOME 目录取自环境变量 `CLR_HOME`，未设置时用 `dirs::home_dir()`，
 ```
 clr junk      [--category <a,b,...>]
 clr large     [PATH] [--min 500M] [--older 90d] [--dirs] [--top N] [--include-library]
-clr dupes     [PATH] [--min 1M]
+clr dupes     [PATH] [--min 1M] [--include-library]
 clr uninstall <App名称 | .app路径>
 ```
 
@@ -106,8 +106,8 @@ desc = "Xcode 编译中间产物，会自动重建"
 
 1. 定位 App：参数是 `.app` 路径时直接使用，否则在 `/Applications`、`~/Applications` 中按名称（忽略大小写，可省略 `.app`）查找。
 2. 用 `plist` crate 读取 `Contents/Info.plist` 的 `CFBundleIdentifier`。
-3. 在以下目录中匹配文件名**等于 Bundle ID 或以 `<BundleID>.` 开头**的项，以及文件名等于 App 名称的项（仅限 Application Support、Caches）：
-   - `~/Library/`：`Application Support`、`Preferences`、`Caches`、`Containers`、`Group Containers`、`Saved Application State`、`LaunchAgents`、`HTTPStorages`、`WebKit`
+3. 在以下目录中匹配文件名**等于 Bundle ID、以 `<BundleID>.` 开头，或以 `.<BundleID>` 结尾**（Group Containers 的 `<TeamID>.<BundleID>`）的项（忽略大小写），以及文件名等于 App 名称的项（仅限 Application Support、Caches）：
+   - `~/Library/`：`Application Support`、`Preferences`、`Preferences/ByHost`、`Caches`、`Containers`、`Group Containers`、`Saved Application State`、`LaunchAgents`、`HTTPStorages`、`WebKit`
    - `/Library/LaunchAgents`、`/Library/LaunchDaemons`
 4. 不做模糊匹配。
 5. App 正在运行（`pgrep -f <app路径>/Contents/MacOS/`）时拒绝卸载并报错。
@@ -117,11 +117,12 @@ desc = "Xcode 编译中间产物，会自动重建"
 
 `safety::is_protected(path)` 在每次删除前调用，命中即拒绝该项并计为失败。以下路径受保护：
 
-- 路径本身是 `/`、HOME、`/System`、`/usr`、`/bin`、`/sbin`、`/Library`、`/Applications`，或以 `/System/`、`/usr/`、`/bin/`、`/sbin/` 开头；
-- HOME 下的这些目录本身：`Documents`、`Desktop`、`Downloads`、`Pictures`、`Movies`、`Music`、`Library`、`.ssh`（其内部文件不受保护）；
+- 路径本身是 `/`、HOME、`/System`、`/usr`、`/bin`、`/sbin`、`/etc`、`/var`、`/private`、`/opt`、`/Library`、`/Applications`、`/Users`、`/Volumes`，或以 `/System/`、`/usr/`、`/bin/`、`/sbin/`、`/etc/`、`/private/etc/` 开头；
+- HOME 下的这些目录本身：`Documents`、`Desktop`、`Downloads`、`Pictures`、`Movies`、`Music`、`Library`、`.ssh`、`.Trash`（其内部文件不受保护）；
 - 带 `..` 的路径不做规范化就直接拒绝。
 
-- 所有遍历都不跟随符号链接；删除符号链接时只删链接本身。
+- 所有遍历都不跟随符号链接，也不跨文件系统（类似 `du -x`，避免把 ~/OrbStack 这类挂载点算进来）；删除符号链接时只删链接本身。
+- 删除前还会解析父目录的符号链接，用真实路径再检查一次受保护路径。
 - `/Library` 下的文件删除失败（EACCES / EPERM）时，提示「使用 sudo 重新运行」，不静默失败。
 
 ## 6. 错误处理
@@ -141,7 +142,7 @@ desc = "Xcode 编译中间产物，会自动重建"
   - uninstall：带 `Info.plist` 的假 `.app` 加残留文件能被全部匹配，不相关的相似名称文件不被匹配；
   - 符号链接不被跟随；指向受保护路径的删除被拒绝；
   - `--clean --yes --permanent` 确实删除临时文件，退出码正确。
-- 废纸篓路径通过 `Remover` trait 注入假实现测试；集成测试不触碰真实废纸篓。
+- 废纸篓路径通过 `Remover` trait 注入假实现测试；集成测试设置环境变量 `CLR_TRASH_DIR`，让「移到废纸篓」改为移动到临时目录，不触碰真实废纸篓。
 
 ## 8. 依赖
 

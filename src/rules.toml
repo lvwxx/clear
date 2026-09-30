@@ -1,0 +1,85 @@
+# 内置清理规则。同一路径只归入第一条匹配的规则，所以具体规则写在前，泛化规则写在后。
+
+[[rule]]
+id = "xcode-derived"
+category = "xcode"
+paths = ["~/Library/Developer/Xcode/DerivedData/*"]
+desc = "Xcode 编译中间产物，会自动重建"
+
+[[rule]]
+id = "xcode-archives"
+category = "xcode"
+paths = ["~/Library/Developer/Xcode/Archives/*"]
+desc = "Xcode 归档包，删除后无法重新提交这些构建"
+
+[[rule]]
+id = "xcode-simulator-caches"
+category = "xcode"
+paths = ["~/Library/Developer/CoreSimulator/Caches/*"]
+desc = "模拟器缓存，会自动重建"
+
+[[rule]]
+id = "ios-backup"
+category = "ios-backup"
+paths = ["~/Library/Application Support/MobileSync/Backup/*"]
+desc = "iOS 设备本地备份"
+
+[[rule]]
+id = "npm-cache"
+category = "dev"
+paths = ["~/.npm/_cacache"]
+desc = "npm 下载缓存"
+
+[[rule]]
+id = "yarn-cache"
+category = "dev"
+paths = ["~/Library/Caches/Yarn"]
+desc = "Yarn 下载缓存"
+
+[[rule]]
+id = "pnpm-store"
+category = "dev"
+paths = ["~/Library/pnpm/store"]
+desc = "pnpm 内容寻址存储"
+
+[[rule]]
+id = "cargo-registry-cache"
+category = "dev"
+paths = ["~/.cargo/registry/cache"]
+desc = "Cargo 下载的 crate 压缩包"
+
+[[rule]]
+id = "go-build-cache"
+category = "dev"
+paths = ["~/Library/Caches/go-build"]
+desc = "Go 编译缓存"
+
+[[rule]]
+id = "homebrew-cache"
+category = "dev"
+paths = ["~/Library/Caches/Homebrew"]
+desc = "Homebrew 下载缓存"
+
+[[rule]]
+id = "pip-cache"
+category = "dev"
+paths = ["~/Library/Caches/pip"]
+desc = "pip 下载缓存"
+
+[[rule]]
+id = "trash"
+category = "trash"
+paths = ["~/.Trash/*"]
+desc = "废纸篓中的项目"
+
+[[rule]]
+id = "user-logs"
+category = "logs"
+paths = ["~/Library/Logs/*"]
+desc = "应用日志"
+
+[[rule]]
+id = "user-caches"
+category = "cache"
+paths = ["~/Library/Caches/*"]
+desc = "应用缓存，会自动重建"
