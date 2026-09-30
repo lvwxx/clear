@@ -8,6 +8,7 @@ mod remove;
 mod report;
 mod rules;
 mod safety;
+mod select;
 mod size;
 mod uninstall;
 mod walk;
@@ -19,8 +20,6 @@ use std::time::Duration;
 
 use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
-use dialoguer::MultiSelect;
-use dialoguer::theme::ColorfulTheme;
 
 use finding::Finding;
 use remove::{PermanentRemover, Remover, TrashRemover};
@@ -221,16 +220,8 @@ fn select<'a>(findings: &'a [Finding], home: &Path, preselect: bool) -> Result<V
         bail!("非交互终端下删除需要加 --yes");
     }
     let labels: Vec<String> = findings.iter().map(|f| report::label(f, home)).collect();
-    // ColorfulTheme 用 ✔ 标记已勾选项，默认主题是 [x]/[ ]，不够直观
-    let chosen = MultiSelect::with_theme(&ColorfulTheme::default())
-        .with_prompt("空格勾选/取消，a 全选，回车确认，Esc 放弃")
-        .items(&labels)
-        .defaults(&vec![preselect; findings.len()])
-        .max_length(20)
-        // 关掉控件自带的汇总行（会把所有选中项用逗号拼成一大段），改用下面的简短汇总
-        .report(false)
-        .interact_opt()?
-        .unwrap_or_default();
+    let sizes: Vec<u64> = findings.iter().map(|f| f.size).collect();
+    let chosen = select::multi_select(&labels, &sizes, preselect)?.unwrap_or_default();
     let selected: Vec<&Finding> = chosen.into_iter().map(|i| &findings[i]).collect();
     if !selected.is_empty() {
         report::print_selected(&selected);
