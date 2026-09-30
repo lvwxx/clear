@@ -19,6 +19,7 @@ use std::time::Duration;
 use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
 use dialoguer::MultiSelect;
+use dialoguer::theme::ColorfulTheme;
 
 use finding::Finding;
 use remove::{PermanentRemover, Remover, TrashRemover};
@@ -213,7 +214,8 @@ fn select<'a>(findings: &'a [Finding], home: &Path, preselect: bool) -> Result<V
         bail!("非交互终端下删除需要加 --yes");
     }
     let labels: Vec<String> = findings.iter().map(|f| report::label(f, home)).collect();
-    let chosen = MultiSelect::new()
+    // ColorfulTheme 用 ✔ 标记已勾选项，默认主题是 [x]/[ ]，不够直观
+    let chosen = MultiSelect::with_theme(&ColorfulTheme::default())
         .with_prompt("空格勾选/取消，a 全选，回车确认，Esc 放弃")
         .items(&labels)
         .defaults(&vec![preselect; findings.len()])
