@@ -220,6 +220,7 @@ dependencies = [
  "assert_cmd",
  "blake3",
  "clap",
+ "console",
  "dialoguer",
  "dirs",
  "glob",

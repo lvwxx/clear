@@ -179,7 +179,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
         if cli.json {
             report::print_json(&findings, None, stats.skipped());
         } else {
-            println!("没有选中任何项目。");
+            println!("{}", console::style("没有选中任何项目。").dim());
         }
         return Ok(ExitCode::SUCCESS);
     }
@@ -220,9 +220,15 @@ fn select<'a>(findings: &'a [Finding], home: &Path, preselect: bool) -> Result<V
         .items(&labels)
         .defaults(&vec![preselect; findings.len()])
         .max_length(20)
+        // 关掉控件自带的汇总行（会把所有选中项用逗号拼成一大段），改用下面的简短汇总
+        .report(false)
         .interact_opt()?
         .unwrap_or_default();
-    Ok(chosen.into_iter().map(|i| &findings[i]).collect())
+    let selected: Vec<&Finding> = chosen.into_iter().map(|i| &findings[i]).collect();
+    if !selected.is_empty() {
+        report::print_selected(&selected);
+    }
+    Ok(selected)
 }
 
 /// HOME 目录。环境变量 `CLR_HOME` 优先，供测试注入假 HOME。
