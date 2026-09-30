@@ -3,12 +3,15 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
+use trash::macos::{DeleteMethod, TrashContextExtMacos};
 
 pub trait Remover {
     fn remove(&self, path: &Path) -> Result<()>;
 }
 
-/// 移到废纸篓，走 Finder 接口，支持「放回原处」。
+/// 移到废纸篓。用 NSFileManager 而不是 trash crate 默认的 Finder：Finder 每个文件一次
+/// AppleScript 调用，遇到只读目录还会逐个弹窗要密码；NSFileManager 不弹窗，
+/// 没权限就直接报错。代价是部分系统上废纸篓里没有「放回原处」。
 ///
 /// 设置了环境变量 `CLR_TRASH_DIR` 时改为移动到该目录，供集成测试使用，避免碰真实废纸篓。
 pub struct TrashRemover;
@@ -25,7 +28,20 @@ impl Remover for TrashRemover {
             }
             return std::fs::rename(path, &dest).map_err(Into::into);
         }
-        trash::delete(path).map_err(|e| anyhow::anyhow!("{e}"))
+        let mut ctx = trash::TrashContext::default();
+        ctx.set_delete_method(DeleteMethod::NsFileManager);
+        ctx.delete(path).map_err(|e| anyhow::anyhow!(trash_error_reason(&e)))
+    }
+}
+
+/// trash crate 的错误会带上完整路径和内部调用名，只保留系统给出的原因。
+fn trash_error_reason(err: &trash::Error) -> String {
+    match err {
+        trash::Error::Unknown { description } => description
+            .split_once("failed: ")
+            .map_or(description.as_str(), |(_, reason)| reason)
+            .to_string(),
+        other => other.to_string(),
     }
 }
 

@@ -15,7 +15,7 @@ clr junk                          # 缓存、日志、Xcode、iOS 备份、废�
 clr junk --category dev,xcode     # 只看某些类别
 clr large --min 1G --older 90d    # 90 天没访问过的 1G 以上文件
 clr large --dirs                  # HOME 下占用最多的目录
-clr dupes ~/Downloads             # 重复文件（默认只比较 ≥ 1M 的）
+clr dupes ~/Downloads             # 重复文件（默认只比较 ≥ 1M 的，跳过 node_modules、Go/Rust/npm 依赖缓存）
 clr uninstall Slack               # 应用本体 + Library 下的残留
 ```
 
@@ -46,6 +46,7 @@ desc = "Rust 编译产物"
 
 - 删除前检查受保护路径：系统目录、HOME 本身、`~/Documents` 等目录本身不会被删除，父目录是符号链接时按真实路径再检查一次。
 - 遍历不跟随符号链接，也不跨文件系统。
+- 移到废纸篓用 NSFileManager 而不是 Finder，不会弹窗要密码；没有权限的文件直接报失败。
 - 卸载只按 Bundle ID 精确匹配残留，App 正在运行时拒绝卸载。
 - 没有权限读取的路径会跳过并在结束时提示。要扫描完整，需要在「系统设置 › 隐私与安全性 › 完全磁盘访问权限」中为终端授权。
 

@@ -91,16 +91,17 @@ pub fn disk_bytes(meta: &Metadata) -> u64 {
     meta.blocks() * 512
 }
 
-/// 目录遍历时要跳过（不进入）的目录。
+/// 目录遍历时要跳过（不进入）的目录：按完整路径，或按目录名（在任意层级生效）。
 #[derive(Clone, Default)]
 pub struct Skip {
     pub dirs: Vec<PathBuf>,
-    pub git: bool,
+    pub names: Vec<&'static str>,
 }
 
 impl Skip {
-    fn matches(&self, path: &Path) -> bool {
-        (self.git && path.file_name().is_some_and(|n| n == ".git"))
+    pub fn matches(&self, path: &Path) -> bool {
+        path.file_name()
+            .is_some_and(|n| self.names.iter().any(|name| n == *name))
             || self.dirs.iter().any(|d| d == path)
     }
 }
@@ -241,7 +242,7 @@ mod tests {
 
         let skip = Skip {
             dirs: vec![root.join("skipme")],
-            git: true,
+            names: vec![".git"],
         };
         let names: Vec<_> = files(root, &skip, &Stats::default())
             .into_iter()

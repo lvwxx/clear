@@ -44,9 +44,7 @@ pub fn dirs(root: &Path, top: usize, skip: &Skip, stats: &Stats) -> Vec<Finding>
         .map(|e| e.path())
         // 不统计挂载在这里的其他文件系统
         .filter(|p| walk::device(p) == root_dev)
-        .filter(|p| {
-            !(skip.dirs.contains(p) || skip.git && p.file_name().is_some_and(|n| n == ".git"))
-        })
+        .filter(|p| !skip.matches(p))
         .map(|path| Finding {
             size: walk::disk_usage(&path, stats),
             category: if path.is_dir() { "dir" } else { "file" }.into(),

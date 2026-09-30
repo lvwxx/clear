@@ -90,6 +90,9 @@ enum Cmd {
         /// 不跳过 ~/Library
         #[arg(long)]
         include_library: bool,
+        /// 不跳过依赖目录（node_modules、~/.gvm、~/go/pkg/mod、~/.cargo、~/.rustup、~/.npm）
+        #[arg(long)]
+        include_deps: bool,
     },
     /// 卸载应用并清理它在 Library 下的残留文件
     Uninstall {
@@ -148,9 +151,13 @@ fn run(cli: Cli) -> Result<ExitCode> {
             path,
             min,
             include_library,
+            include_deps,
         } => {
             let root = resolve_root(path.as_deref(), &home)?;
-            let skip = default_skip(&home, *include_library);
+            let mut skip = default_skip(&home, *include_library);
+            if !include_deps {
+                skip_deps(&mut skip, &home);
+            }
             (dupes::scan(&root, *min, &skip, &stats), true)
         }
         Cmd::Uninstall { app } => {
@@ -255,6 +262,17 @@ fn default_skip(home: &Path, include_library: bool) -> Skip {
         } else {
             vec![home.join("Library")]
         },
-        git: true,
+        names: vec![".git"],
     }
+}
+
+/// 依赖目录里的「重复」是包管理器有意为之，删掉会让项目编译不了；
+/// Go 模块缓存还是只读的，删除会触发权限问题。
+fn skip_deps(skip: &mut Skip, home: &Path) {
+    skip.names.push("node_modules");
+    skip.dirs.extend(
+        [".gvm", "go/pkg/mod", ".cargo", ".rustup", ".npm"]
+            .iter()
+            .map(|d| home.join(d)),
+    );
 }

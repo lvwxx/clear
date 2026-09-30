@@ -361,3 +361,19 @@ fn bad_size_argument_is_usage_error() {
     let env = Env::new();
     env.clr().args(["large", "--min", "5X"]).assert().code(2);
 }
+
+#[test]
+fn dupes_skips_dependency_dirs_by_default() {
+    let env = Env::new();
+    let content = vec![5u8; 2 << 20];
+    env.write_bytes("proj-a/node_modules/lib/big.js", &content);
+    env.write_bytes("proj-b/node_modules/lib/big.js", &content);
+    env.write_bytes("go/pkg/mod/x@v1/big.bin", &content);
+    env.write_bytes("go/pkg/mod/y@v1/big.bin", &content);
+
+    let (_, v) = env.json(&["dupes"]);
+    assert_eq!(env.paths(&v), Vec::<String>::new());
+
+    let (_, v) = env.json(&["dupes", "--include-deps"]);
+    assert_eq!(v["findings"].as_array().unwrap().len(), 3);
+}
