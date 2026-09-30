@@ -116,6 +116,10 @@ desc = "Xcode 编译中间产物，会自动重建"
 5. App 正在运行（`pgrep -f <app路径>/Contents/MacOS/`）时拒绝卸载并报错。
 6. `.app` 本体本身也作为一个 `Finding` 列出。
 
+### 4.5 projects（实现后新增）
+
+`clr projects [PATH] [--older 30d]`：查找项目构建产物，只有旁边有项目标志文件时才算（`target`+`Cargo.toml`/`pom.xml`、`node_modules` 等+`package.json`、`.venv`/`venv` 内有 `pyvenv.cfg`、`build`/`.gradle`+`build.gradle(.kts)`、`.build`+`Package.swift`、`Pods`+`Podfile`、`zig-cache`+`build.zig`、`_build`+`mix.exs`）。找到后不再深入；跳过 `~/Library`、`.git`、包管理器缓存和 HOME 下的所有隐藏目录（全局安装的工具）。说明里显示项目多少天未改动（项目目录直接子项的最新修改时间），`--older` 按此过滤。
+
 ## 5. 安全
 
 `safety::is_protected(path)` 在每次删除前调用，命中即拒绝该项并计为失败。以下路径受保护：

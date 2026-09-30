@@ -4,6 +4,7 @@ mod finding;
 mod junk;
 mod large;
 mod progress;
+mod projects;
 mod remove;
 mod report;
 mod rules;
@@ -80,6 +81,14 @@ enum Cmd {
         #[arg(long)]
         include_library: bool,
     },
+    /// 查找项目构建产物（target、node_modules、.venv 等），可随时重新生成
+    Projects {
+        /// 扫描的目录，默认 HOME
+        path: Option<PathBuf>,
+        /// 只列出这么久没改动过的项目，如 30d、4w
+        #[arg(long, value_parser = size::parse_duration)]
+        older: Option<Duration>,
+    },
     /// 查找内容完全相同的重复文件
     Dupes {
         /// 扫描的目录，默认 HOME
@@ -146,6 +155,13 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 large::files(&root, *min, *older, &skip, &stats)
             };
             (found, false)
+        }
+        Cmd::Projects { path, older } => {
+            let root = resolve_root(path.as_deref(), &home)?;
+            let mut skip = default_skip(&home, false);
+            skip.dirs.extend(dep_cache_dirs(&home));
+            skip.dirs.extend(hidden_dirs(&home));
+            (projects::scan(&root, *older, &skip, &stats), true)
         }
         Cmd::Dupes {
             path,
@@ -338,9 +354,27 @@ fn default_skip(home: &Path, include_library: bool) -> Skip {
 /// Go 模块缓存还是只读的，删除会触发权限问题。
 fn skip_deps(skip: &mut Skip, home: &Path) {
     skip.names.push("node_modules");
-    skip.dirs.extend(
-        [".gvm", "go/pkg/mod", ".cargo", ".rustup", ".npm"]
-            .iter()
-            .map(|d| home.join(d)),
-    );
+    skip.dirs.extend(dep_cache_dirs(home));
+}
+
+/// HOME 下的隐藏目录（~/.nvm、~/.local、~/.claude、~/.Trash 等）放的是工具、配置和缓存，
+/// 不是用户的项目；里面的 node_modules 属于已安装的全局工具，删了工具就坏了。
+/// 明确把其中某个目录作为扫描根目录时仍会扫描。
+fn hidden_dirs(home: &Path) -> Vec<PathBuf> {
+    std::fs::read_dir(home)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().starts_with('.'))
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .map(|e| e.path())
+        .collect()
+}
+
+/// 包管理器的全局缓存目录，里面的东西不属于任何一个项目。
+fn dep_cache_dirs(home: &Path) -> Vec<PathBuf> {
+    [".gvm", "go/pkg/mod", ".cargo", ".rustup", ".npm"]
+        .iter()
+        .map(|d| home.join(d))
+        .collect()
 }

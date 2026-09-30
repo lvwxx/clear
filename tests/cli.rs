@@ -504,3 +504,35 @@ fn uninstall_orphan_leftovers_by_bundle_id() {
         .code(2)
         .stderr(predicates::str::contains("也没有它的残留"));
 }
+
+#[test]
+fn projects_finds_build_artifacts_and_cleans_them() {
+    let env = Env::new();
+    env.write("code/app/Cargo.toml", 10);
+    env.write("code/app/target/debug/app", 50_000);
+    env.write("code/web/package.json", 10);
+    env.write("code/web/node_modules/lib/index.js", 30_000);
+    env.write("notes/target/keep.txt", 30_000);
+    // ~/.cargo 下的东西不属于项目；HOME 下隐藏目录里是全局安装的工具
+    env.write(".cargo/registry/src/x/Cargo.toml", 10);
+    env.write(".cargo/registry/src/x/target/y", 30_000);
+    env.write(
+        ".nvm/versions/node/v22/lib/node_modules/cli/package.json",
+        10,
+    );
+    env.write(
+        ".nvm/versions/node/v22/lib/node_modules/cli/node_modules/dep/i.js",
+        30_000,
+    );
+
+    let (code, v) = env.json(&["projects"]);
+    assert_eq!(code, 0);
+    assert_eq!(env.paths(&v), ["code/app/target", "code/web/node_modules"]);
+
+    let (code, v) = env.json(&["projects", "--clean", "--yes", "--permanent"]);
+    assert_eq!(code, 0);
+    assert_eq!(v["clean"]["removed"], 2);
+    assert!(!env.home.join("code/app/target").exists());
+    assert!(env.home.join("code/app/Cargo.toml").exists());
+    assert!(env.home.join("notes/target/keep.txt").exists());
+}
