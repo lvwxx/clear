@@ -456,9 +456,15 @@ fn uninstall_includes_helpers_scripts_and_crash_reports() {
     );
     env.write("Library/Containers/com.acme.DrFooLogin/x", 100);
     env.write("Library/Application Scripts/com.acme.DrFoo/s", 100);
-    env.write("Library/Logs/DiagnosticReports/DrFoo_2026-09-25-231025_host.diag", 100);
+    env.write(
+        "Library/Logs/DiagnosticReports/DrFoo_2026-09-25-231025_host.diag",
+        100,
+    );
     env.write("Library/Caches/org.sparkle.Shared/c", 100);
-    env.write("Library/Logs/DiagnosticReports/DrFooBar_2026-09-25.ips", 100);
+    env.write(
+        "Library/Logs/DiagnosticReports/DrFooBar_2026-09-25.ips",
+        100,
+    );
 
     let (code, v) = env.json(&["uninstall", "DrFoo"]);
     assert_eq!(code, 0);
@@ -471,4 +477,30 @@ fn uninstall_includes_helpers_scripts_and_crash_reports() {
             "Library/Logs/DiagnosticReports/DrFoo_2026-09-25-231025_host.diag",
         ]
     );
+}
+
+#[test]
+fn uninstall_orphan_leftovers_by_bundle_id() {
+    let env = Env::new();
+    env.write("Library/Containers/com.gone.App/x", 100);
+    env.write("Library/Containers/com.gone.App.widget/y", 100);
+    env.write("Library/Preferences/com.gone.App.plist", 100);
+    env.write("Library/Containers/com.gone.AppOther/z", 100);
+
+    let (code, v) = env.json(&["uninstall", "com.gone.App"]);
+    assert_eq!(code, 0);
+    assert_eq!(
+        env.paths(&v),
+        [
+            "Library/Containers/com.gone.App",
+            "Library/Containers/com.gone.App.widget",
+            "Library/Preferences/com.gone.App.plist",
+        ]
+    );
+
+    env.clr()
+        .args(["uninstall", "com.nothing.here"])
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains("也没有它的残留"));
 }

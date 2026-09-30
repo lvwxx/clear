@@ -115,6 +115,19 @@ pub fn print_outcome(outcome: &Outcome, home: &Path, to_trash: bool) {
             outcome.failed.len()
         );
     }
+    if outcome.needs_full_disk_access(home) {
+        let terminal = std::env::var("TERM_PROGRAM").unwrap_or_else(|_| "终端".into());
+        eprintln!(
+            "  {}",
+            style(format!(
+                "~/Library/Containers 下是 macOS 保护的应用数据，sudo 也删不了。\n  \
+                 请在 系统设置 › 隐私与安全性 › 完全磁盘访问权限 中打开「{terminal}」，重启它后重新运行。\n  \
+                 应用本体已删除的话，可以用 Bundle ID 清理残留：clr uninstall <BundleID> --clean"
+            ))
+            .yellow()
+            .for_stderr()
+        );
+    }
     if outcome.needs_sudo() {
         eprintln!(
             "  {}",

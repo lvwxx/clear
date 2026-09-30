@@ -365,7 +365,29 @@ pub fn app_finding(app: &App, size: u64) -> Finding {
 pub fn scan(app: &App, home: &Path, stats: &Stats) -> Vec<Finding> {
     stats.stage("统计应用大小");
     let mut out = vec![app_finding(app, walk::disk_usage(&app.path, stats))];
+    let ids: Vec<&str> = std::iter::once(app.bundle_id.as_str())
+        .chain(app.helper_ids.iter().map(String::as_str))
+        .collect();
+    out.extend(leftovers(&ids, &app.names, home, stats));
+    out
+}
+
+/// 应用本体已经删掉时，只按 Bundle ID 找残留。
+pub fn scan_orphan(bundle_id: &str, home: &Path, stats: &Stats) -> Vec<Finding> {
+    leftovers(&[bundle_id], &[], home, stats)
+}
+
+/// 参数看起来像 Bundle ID（`com.vendor.App` 这种，无空格和斜杠）。
+pub fn looks_like_bundle_id(arg: &str) -> bool {
+    let parts: Vec<&str> = arg.split('.').collect();
+    parts.len() >= 2
+        && parts.iter().all(|p| !p.is_empty())
+        && !arg.contains(|c: char| c.is_whitespace() || c == '/')
+}
+
+fn leftovers(ids: &[&str], names: &[String], home: &Path, stats: &Stats) -> Vec<Finding> {
     stats.stage("查找残留文件");
+    let mut out = Vec::new();
     let library = home.join("Library");
     let dirs = USER_LIBRARY_DIRS
         .iter()
@@ -385,9 +407,6 @@ pub fn scan(app: &App, home: &Path, stats: &Stats) -> Vec<Finding> {
             };
             (dir, Match::CrashReport)
         }));
-    let ids: Vec<&str> = std::iter::once(app.bundle_id.as_str())
-        .chain(app.helper_ids.iter().map(String::as_str))
-        .collect();
     for (dir, mode) in dirs {
         stats.at(&dir);
         let Ok(entries) = std::fs::read_dir(&dir) else {
@@ -399,9 +418,9 @@ pub fn scan(app: &App, home: &Path, stats: &Stats) -> Vec<Finding> {
             .filter(|p| {
                 let name = p.file_name().unwrap_or_default().to_string_lossy();
                 match mode {
-                    Match::Id => is_leftover(&name, &ids, &[]),
-                    Match::IdOrName => is_leftover(&name, &ids, &app.names),
-                    Match::CrashReport => is_crash_report(&name, &app.names),
+                    Match::Id => is_leftover(&name, ids, &[]),
+                    Match::IdOrName => is_leftover(&name, ids, names),
+                    Match::CrashReport => is_crash_report(&name, names),
                 }
             })
             .collect();
@@ -508,6 +527,16 @@ mod tests {
         let ascii_le: Vec<u8> = "ab".encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
         assert_eq!(decode_text(&ascii_le), "ab");
         assert_eq!(decode_text("中文".as_bytes()), "中文");
+    }
+
+    #[test]
+    fn bundle_id_shape() {
+        assert!(looks_like_bundle_id("com.trendmicro.DrCleanerProPlus"));
+        assert!(looks_like_bundle_id("cn.com.10jqka.macstockPro"));
+        assert!(!looks_like_bundle_id("Cleaner One Pro"));
+        assert!(!looks_like_bundle_id("Foo"));
+        assert!(!looks_like_bundle_id("Foo.app/x"));
+        assert!(!looks_like_bundle_id("com..x"));
     }
 
     #[test]

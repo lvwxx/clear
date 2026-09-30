@@ -26,6 +26,15 @@ impl Outcome {
     pub fn needs_sudo(&self) -> bool {
         self.failed.iter().any(|f| f.path.starts_with("/Library/"))
     }
+
+    /// 应用的数据容器受 macOS 保护，只有「完全磁盘访问权限」能删，sudo 也不行。
+    pub fn needs_full_disk_access(&self, home: &Path) -> bool {
+        let library = home.join("Library");
+        self.failed.iter().any(|f| {
+            f.path.starts_with(library.join("Containers"))
+                || f.path.starts_with(library.join("Group Containers"))
+        })
+    }
 }
 
 pub fn execute(items: &[&Finding], remover: &dyn Remover, home: &Path) -> Outcome {

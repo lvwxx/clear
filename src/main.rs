@@ -160,13 +160,23 @@ fn run(cli: Cli) -> Result<ExitCode> {
             }
             (dupes::scan(&root, *min, &skip, &stats), true)
         }
-        Cmd::Uninstall { app: Some(arg) } => {
-            let app = uninstall::locate(arg, &home)?;
-            if cli.clean && uninstall::is_running(&app) {
-                bail!("{} 正在运行，请先退出再卸载", app.display);
+        Cmd::Uninstall { app: Some(arg) } => match uninstall::locate(arg, &home) {
+            Ok(app) => {
+                if cli.clean && uninstall::is_running(&app) {
+                    bail!("{} 正在运行，请先退出再卸载", app.display);
+                }
+                (uninstall::scan(&app, &home, &stats), true)
             }
-            (uninstall::scan(&app, &home, &stats), true)
-        }
+            // 应用本体已删除，但还能按 Bundle ID 清理残留
+            Err(_) if uninstall::looks_like_bundle_id(arg) => {
+                let found = uninstall::scan_orphan(arg, &home, &stats);
+                if found.is_empty() {
+                    bail!("找不到 Bundle ID 为 {arg} 的应用，也没有它的残留文件");
+                }
+                (found, true)
+            }
+            Err(e) => return Err(e),
+        },
         Cmd::Uninstall { app: None } if !cli.clean => {
             let apps = uninstall::list_with_sizes(&home, &stats);
             let found = apps
